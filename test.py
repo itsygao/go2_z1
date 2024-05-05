@@ -82,24 +82,28 @@ class Unitree_go2_z1(BaseAgent):
     uid = "unitree_go2_z1"
     urdf_path = f"{ASSET_DIR}/robots/unitree_go2_z1/urdf/go2_z1_description.urdf"
 
-    fix_root_link = True
+    fix_root_link = False
     disable_self_collisions = True
 
     keyframes = dict(
         standing=Keyframe(
             pose=sapien.Pose(p=[0, 0, 0.29]),
             qpos=np.array(
-                [0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.9, 0.9, -1.8, -1.8, -1.8, -1.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                [0.0, 0.0, 0.0, 0.0, 0.0, 0.9, 0.9, 0.9, 0.9, -1.8, -1.8, -1.8, -1.8, 0.0, 0.0, 0.0, 0.0, 0.0, np.pi / 4, 0.04, 0.04]
             ),
         )
     )
 
     joint_names = ['FL_hip_joint', 'FR_hip_joint', 'RL_hip_joint', 'RR_hip_joint', 
-                   'go2_z1_joint',
+                   'go2_z1_joint', 
                    'FL_thigh_joint', 'FR_thigh_joint', 'RL_thigh_joint', 'RR_thigh_joint', 
                    'FL_calf_joint', 'FR_calf_joint', 'RL_calf_joint', 'RR_calf_joint', 
                    'z1_joint1', 'z1_joint2', 'z1_joint3', 'z1_joint4', 
                    'z1_joint5', 'z1_joint6']
+    gripper_joint_names = [
+        "panda_finger_joint1",
+        "panda_finger_joint2",
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -109,6 +113,9 @@ class Unitree_go2_z1(BaseAgent):
         self.arm_stiffness = 80.0
         self.arm_damping = 2.0
         self.arm_force_limit = 100
+        self.gripper_stiffness = 1e3
+        self.gripper_damping = 1e2
+        self.gripper_force_limit = 100
         # delta action scale for Omni Isaac Gym Envs is self.dt * self.action_scale = 1/60 * 13.5. NOTE that their self.dt value is not the same as the actual DT used in sim...., they use default of 1/100
         print([i.name for i in self.robot.active_joints])
         pd_joint_delta_pos = PDJointPosControllerConfig(
@@ -131,12 +138,20 @@ class Unitree_go2_z1(BaseAgent):
             normalize_action=False,
             use_delta=False,
         )
+        gripper_pd_joint_pos = PDJointPosMimicControllerConfig(
+            self.gripper_joint_names,
+            lower=-0.01,  # a trick to have force when the object is thin
+            upper=0.04,
+            stiffness=self.gripper_stiffness,
+            damping=self.gripper_damping,
+            force_limit=self.gripper_force_limit,
+        )
         # TODO (stao): For quadrupeds perhaps we disable gravit for all links except the root?
         controller_configs = dict(
             pd_joint_delta_pos=dict(
-                body=pd_joint_delta_pos, balance_passive_force=False
+                body=pd_joint_delta_pos, gripper=gripper_pd_joint_pos, balance_passive_force=False
             ),
-            pd_joint_pos=dict(body=pd_joint_pos, balance_passive_force=False),
+            pd_joint_pos=dict(body=pd_joint_pos, gripper=gripper_pd_joint_pos, balance_passive_force=False),
         )
         return controller_configs
 
